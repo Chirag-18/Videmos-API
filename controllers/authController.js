@@ -8,8 +8,8 @@ const User=require("../models/userModel");
 const emailServices=require("../services/emailServices");
 const AppError=require("../utility/appError");
 const catchAsync=require("../utility/catchAsync");
-const { JsonWebTokenError } = require("jsonwebtoken");
 
+require("dotenv").config();
 
 exports.signup=catchAsync(async(req,res,next)=>{
 
@@ -59,7 +59,7 @@ await newUser.save();
 setTimeout(async () => {
     const user=await User.findById(newUser._id);
 
-    if(user && !user.isVerfied){
+    if(user && !user.isVerified){
         await User.deleteOne({ _id : user.id });
     }
 },10 * 60 * 1000);
@@ -105,6 +105,36 @@ exports.verifyAccount = catchAsync(async (req,res,next) => {
     res.status(201).json({
         message:"User is verified",
         token:token,
+    });
+
+});
+
+exports.login =catchAsync( async (req , res, next) => {
+    const {email,password }=req.body;
+
+    if(!email || !password){
+    return next (new AppError("Please provide email and password"),400);
+    }
+
+    if(!validator.default.isEmail(email)){
+        return next(new AppError("Please provide a valid email", 400)); 
+    }
+
+    const user=await User.findOne({email});
+
+    if(user.isVerified ===false){
+        return next(new AppError("Please verify your account first.", 400));
+    }
+
+    if(!user || !(await bcrypt.compare(password,user.password))){
+        return next(new AppError("Incorrect email or password", 400));
+    }
+
+    const token=jwt.sign({userId :user._id},process.env.JWT_SECRET);
+
+    res.status(200).json({
+        message:"You are login successfully",
+        token,
     });
 
 });

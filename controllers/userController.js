@@ -2,41 +2,50 @@ const validator = require("validator");
 const otpGenerator = require("otp-generator");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const cloudinary = require("cloudinary").v2;
+const streamifier = require("streamifier");
 
 const User = require("../models/userModel");
 const catchAsync = require("../utility/catchAsync");
 const AppError = require("../utility/appError");
 const emailServices = require("../services/emailServices.js");
 
-exports.updateBasicInfo = catchAsync(async (req,res,next) => {
-   const { firstName,lastName,UserName} = req.body;
-    const { id }=req.user;
+// Cloudinary Config
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUDNAME,
+  api_key: process.env.CLOUDINARY_APIKEY,
+  api_secret: process.env.CLOUDINARY_APISECRET,
+});
 
-    const user = await User.findById(_id);
-     
-    if(!user){
-        return next(new AppError("User not found"),400);
-    }
+exports.updateBasicInfo = catchAsync(async (req, res, next) => {
+  const { firstName, lastName, username } = req.body;
+  const { _id } = req.user;
 
-    if (!firstName || firstName.length > 40) {
-        return next(new AppError("First name should be less then 40."));
-      }
-    
-      if (!lastName || lastName.length > 40) {
-        return next(new AppError("Last name should be less then 40."));
-      }
+  const user = await User.findById(_id);
 
-      const existingUsername=await User.findOne({userName});
+  if (!user) {
+    return next(new AppError("User not found.", 400));
+  }
 
-      if(existingUsername){
-        return next (new AppError("Username already taken"));
-      }
+  if (!firstName || firstName.length > 40) {
+    return next(new AppError("First name should be less then 40."));
+  }
 
-    user.firstName = firstName;
-    user.lastName = lastName;
-    user.username = userName;
+  if (!lastName || lastName.length > 40) {
+    return next(new AppError("Last name should be less then 40."));
+  }
 
-     await user.save();
+  const existingUsername = await User.findOne({ username });
+
+  if (existingUsername) {
+    return next(new AppError("Username is already taken"));
+  }
+
+  user.firstName = firstName;
+  user.lastName = lastName;
+  user.username = username;
+
+  await user.save();
 
   res.status(200).json({
     message: "User Information updated Successfully.",
@@ -123,4 +132,65 @@ exports.resetForgetPassword = catchAsync(async (req, res, next) => {
     message: "Password has been successfully reset.",
     token: token,
   });
+});
+
+exports.deleteAccount = catchAsync(async (req, res, next) => {
+  const { password } = req.body;
+
+  const { _id } = req.user;
+
+  const user = await User.findById(_id);
+
+  if (!user) {
+    return next(new AppError("User not found", 400));
+  }
+
+  const isMatch = await bcrypt.compare(password, user.password);
+
+  if (!isMatch) {
+    return next(new AppError("Invalid Password", 401));
+  }
+
+  await User.deleteOne({ _id });
+
+  res.status(204).json();
+});
+
+exports.updateProfile = catchAsync(async (req, res, next) => {
+  const { _id } = req.user;
+  const profileToUpload = req.file;
+
+  if (!profileToUpload) {
+    return next(new AppError("Please upload a file", 400));
+  }
+
+  const user = await User.findById(_id);
+
+  if (!user) {
+    return next(new AppError("User not found with this id", 404));
+  }
+
+  const profileName = `${user._id}-${profileToUpload.originalname}`;
+
+  const cloudinaryStream = cloudinary.uploader.upload_stream(
+    {
+      folder: "Dev",
+      public_id: profileName,
+    },
+    async (error, result) => {
+      if (error) {
+        console.log(error);
+        return next(new AppError("Error upload photo", 500));
+      } else {
+        user.profile = result.secure_url;
+        await user.save();
+        res.status(201).json({
+          status: "success",
+          message: "Profile photo has been uploaded",
+        });
+      }
+    }
+  );
+
+  streamifier.createReadStream(profileToUpload.buffer).pipe(cloudinaryStream);
 });
