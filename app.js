@@ -3,7 +3,9 @@ const mongoose=require("mongoose");
 
 const authRoutes=require("./routers/authRoutes");
 const userRoutes=require("./routers/userRoutes");
+const videoRoutes=require("./routers/videoRoutes");
 const globalErrorHandler=require("./middlewares/globalErrorHandler");
+const deleteUnverifiedUser=require("./services/deleteUnverifiedUser");
 
 require("dotenv").config();
 
@@ -20,8 +22,18 @@ mongoose
     console.log(err);
 });
 
+(async() => {
+    try{
+        await deleteUnverifiedUser();
+        console.log("Agenda has started");
+    }catch(err){
+        console.log(err);
+    }
+})();
+
 app.use("/auth",authRoutes);
 app.use("/users",userRoutes);
+app.use("/videos",videoRoutes);
 
 app.use(globalErrorHandler);
 

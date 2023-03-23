@@ -48,6 +48,7 @@ const userSchema=new mongoose.Schema({
         type:Boolean,
         default:false,
     },
+    uploadedVideos: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],
     createdAt:{
         type:Date,
         default:Date.now(),

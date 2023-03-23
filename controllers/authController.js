@@ -3,6 +3,7 @@ const uuid=require("uuid");
 const bcrypt=require("bcrypt");
 const validator=require("validator");
 const jwt=require("jsonwebtoken");
+const {Agenda}=require("agenda");
 
 const User=require("../models/userModel");
 const emailServices=require("../services/emailServices");
@@ -10,6 +11,8 @@ const AppError=require("../utility/appError");
 const catchAsync=require("../utility/catchAsync");
 
 require("dotenv").config();
+
+const agenda=new Agenda({ db: {address:process.env.MONGODB_URL}});
 
 exports.signup=catchAsync(async(req,res,next)=>{
 
@@ -56,13 +59,17 @@ optExpiresAt:Date.now() + 10 * 60 * 1000,
 
 await newUser.save();
 
-setTimeout(async () => {
-    const user=await User.findById(newUser._id);
+// setTimeout(async () => {
+//     const user=await User.findById(newUser._id);
 
-    if(user && !user.isVerified){
-        await User.deleteOne({ _id : user.id });
-    }
-},10 * 60 * 1000);
+//     if(user && !user.isVerified){
+//         await User.deleteOne({ _id : user.id });
+//     }
+// },10 * 60 * 1000);
+
+agenda.schedule("10 minutes from now","delete unverified user",{
+    userId:newUser._id,
+});
 
 await emailServices.sendOtpVerificationEmail(normalizedEmail,otp);
 
