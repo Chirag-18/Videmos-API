@@ -4,6 +4,7 @@ const streamifier=require("streamifier");
 
 const Video=require("../models/videoModel");
 const User=require("../models/userModel");
+const Comment=require("../models/commentModel");
 const catchAsync=require("../utility/catchAsync");
 const AppError=require("../utility/appError");
 
@@ -69,4 +70,39 @@ exports.uploadVideo = catchAsync(async (req,res,next) => {
     }
     );
     streamifier.createReadStream(videoToUpload.buffer).pipe(cloudinaryStream);
+});
+
+exports.createComment = catchAsync(async (req, res, next) => {
+  const { _id } = req.user;
+  const videoId = req.params.id;
+
+  const video = await Video.findById(videoId);
+  const user = await User.findById(_id);
+
+  if (!video) {
+    return next(new AppError("Video not found with this Id", 400));
+  }
+
+  const { text } = req.body;
+
+  if (text.length <= 0) {
+    return next(new AppError("Comment text length cann't be null", 400));
+  }
+
+  const newComment = await Comment.create({
+    videoId: videoId,
+    author: _id,
+    text: text,
+  });
+
+  video.comments.push(newComment._id);
+  user.commented.push(newComment._id);
+
+  await video.save();
+  await user.save();
+
+  res.status(201).json({
+    status: "success",
+    data: newComment,
+  });
 });
