@@ -50,6 +50,8 @@ const userSchema=new mongoose.Schema({
     },
     uploadedVideos: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],
     commented:[{type:mongoose.Schema.Types.ObjectId, ref:"Comment"}],
+    commentReplied:[{type:mongoose.Schema.Types.ObjectId, ref:"Reply"}],
+    replyReplied:[{type:mongoose.Schema.Types.ObjectId, ref:"Reply"}],
     createdAt:{
         type:Date,
         default:Date.now(),

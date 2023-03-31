@@ -5,6 +5,7 @@ const streamifier=require("streamifier");
 const Video=require("../models/videoModel");
 const User=require("../models/userModel");
 const Comment=require("../models/commentModel");
+const Reply=require("../models/replyModel");
 const catchAsync=require("../utility/catchAsync");
 const AppError=require("../utility/appError");
 
@@ -105,4 +106,94 @@ exports.createComment = catchAsync(async (req, res, next) => {
     status: "success",
     data: newComment,
   });
+});
+
+exports.createReply = catchAsync(async(req,res,next) => {
+    const  { _id }=req.user;
+    const videoId=req.params.videoId;
+    const commentId=req.params.commentId;
+    const {text}=req.body;
+
+    const video=await Video.findById(videoId);
+    const comment=await Comment.findById(commentId);
+    const user=await User.findById(_id);
+
+     if (!video) {
+    return next(new AppError("Video not found with this Id", 400));
+    }
+
+    if (!comment) {
+    return next(new AppError("Comment not found with this Id", 400));
+    }
+
+    if(!video.comments.includes(commentId)){
+      return next (new AppError("Cooment and video are not related",400));
+    }
+    const reply= await Reply.create({
+      author:_id,
+      text:text,
+      videoId:videoId,
+      parentComment:commentId,
+      parentReply:null,
+    });
+    comment.replies.push(reply._id);
+    user.commentReplied.push(reply._id);
+
+    await comment.save();
+    await user.save();
+
+    res.status(201).json({
+      status: "success",
+      data: reply,
+    });
+});
+
+exports.createChildReply =catchAsync(async( req,res,next) => {
+    const {_id} =req.user;
+    const videoId=req.params.videoId;
+    const commentId=req.params.commentId;
+    const replyId=req.params.replyId;
+    const {text} =req.body;
+
+    const user=await User.findById(_id);
+    const video=await Video.findById(videoId);
+    const comment=await Comment.findById(commentId);
+    const reply=await Reply.findById(replyId);
+    if (!video) {
+      return next(new AppError("Video not found with this Id", 400));
+    }
+  
+    if (!comment) {
+      return next(new AppError("Comment not found with this Id", 400));
+    }
+  
+    if (!reply) {
+      return next(new AppError("Reply not found with this Id", 400));
+    }
+
+    if(!video.comments.includes(commentId)){
+      return next(new AppError("video and comment are not related",400));
+    }
+    if(!comment.replies.includes(replyId)){
+      return next(new AppError("comment and reply are not related",400));
+    }
+
+    const childReply=await Reply.create({
+      author:_id,
+      text: text,
+      videoId: videoId,
+      parentComment: commentId,
+      parentReply: replyId,
+    });
+
+    reply.childReplies.push(childReply._id);
+    user.replyReplied.push(childReply._id);
+
+    await reply.save();
+    await user.save();
+
+    res.status(201).json({
+      status: "success",
+      data: childReply,
+    });
 });

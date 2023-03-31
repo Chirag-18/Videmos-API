@@ -10,6 +10,11 @@ const replySchema=new mongoose.Schema({
         type:String,
         required:true,
     },
+    videoId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"Video",
+        required:true,
+    },
     childReplies:[{type:mongoose.Schema.Types.ObjectId,ref:"Reply"}],
     parentComment:{
         type:mongoose.Schema.Types.ObjectId,
@@ -18,6 +23,10 @@ const replySchema=new mongoose.Schema({
     parentReply:{
         type:mongoose.Schema.Types.ObjectId,
         ref:"Reply",
+    },
+    createdAt:{
+        type:Date,
+        default:Date.now,
     },
 
 });
