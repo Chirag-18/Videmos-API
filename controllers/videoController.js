@@ -350,3 +350,70 @@ exports.getComment=catchAsync(async(req,res,next) => {
     data: comment,
   });
 });
+
+exports.deleteReply=catchAsync(async (req,res,next) => {
+    const { _id }=req.user;
+    const videoId=req.params.videoId;
+    const commentId=req.params.commentId;
+    const replyId=req.params.replyId;
+
+    const video=await Video.findById(videoId);
+    const user=await User.findById(_id);
+    const reply=await Reply.findById(replyId);
+    const comment=await Comment.findById(commentId);
+
+    if (!video) {
+      return next(new AppError("Video not found with this Id", 400));
+    }
+  
+    if (!comment) {
+      return next(new AppError("Comment not found with this Id", 400));
+    }
+
+    if (!video.comments.includes(commentId)) {
+      return next(new AppError("Comment and Video are not related", 400));
+    }
+    
+    if (!comment.replies.includes(replyId)) {
+      return next(new AppError("Video, Comment or reply are not related to each other"));
+    }
+
+    if (!user.commentReplied.includes(replyId)) {
+      return next(new AppError("Only owner of the reply can delete it."));
+    }
+
+    await Comment.updateOne({_id: commentId},{$pull:{replies:replyId}});
+
+    const childRepliesIds=await Reply.aggregate([
+      { $match :{parentReply :new mongoose.Types.ObjectId(replyId)} },
+      { $project:{_id:1}},
+    ]);
+
+    const childRepliesIdsToDelete = childRepliesIds.map((reply) => {
+      return reply._id;
+    });
+
+    childRepliesIdsToDelete.push(replyId);
+
+    await User.updateMany(
+      {
+        $or:[
+          {commentReplied: { $in :childRepliesIdsToDelete}},
+          {replyReplied : { $in :childRepliesIdsToDelete}},
+        ],
+      },
+      {
+        $pull:{
+          commentReplied: { $in :childRepliesIdsToDelete},
+          replyReplied : { $in :childRepliesIdsToDelete},
+        },
+      }
+    );
+
+    await Reply.deleteMany({ _id: { $in: childRepliesIdsToDelete } });
+
+    await Reply.deleteOne({ _id: replyId });
+
+    res.status(204).json({});
+
+});
