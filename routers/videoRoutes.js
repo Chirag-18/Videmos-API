@@ -15,8 +15,13 @@ router.route("/:id/comment").post(authMiddlewares.protect,videoController.create
 router.route("/:videoId/comment/:commentId/reply")
     .post(authMiddlewares.protect,videoController.createReply);
     
-    router.route("/:videoId/comment/:commentId/reply/:replyId/reply")
+router.route("/:videoId/comment/:commentId/reply/:replyId/reply")
     .post(authMiddlewares.protect,videoController.createChildReply);
-    
+
+router
+    .route("/:videoId/comment/:commentId")
+    .delete(authMiddlewares.protect,videoController.deleteComment)
+    .get(authMiddlewares.protect,videoController.getComment)
+    .patch(authMiddlewares.protect,videoController.updateComment);
 
 module.exports=router;

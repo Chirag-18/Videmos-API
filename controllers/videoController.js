@@ -1,6 +1,7 @@
 const uuid=require("uuid");
 const cloudinary=require("cloudinary").v2;
 const streamifier=require("streamifier");
+const mongoose=require("mongoose");
 
 const Video=require("../models/videoModel");
 const User=require("../models/userModel");
@@ -196,4 +197,156 @@ exports.createChildReply =catchAsync(async( req,res,next) => {
       status: "success",
       data: childReply,
     });
+});
+
+exports.deleteComment = catchAsync( async (req,res,next) => {
+    const { _id}=req.user;
+    const videoId=req.params.videoId;
+    const commentId=req.params.commentId;
+
+    const user=await User.findById(_id);
+    const video=await Video.findById(videoId);
+    const comment=await Comment.findById(commentId);
+
+    if (!video) {
+      return next(new AppError("Video not found with this Id", 400));
+    }
+  
+    if (!comment) {
+      return next(new AppError("Comment not found with this Id", 400));
+    }
+
+    if(user.uploadedVideos.includes(videoId)){
+      if(!video.comments.includes(commentId)){
+        return next(new AppError("Comment and video are not related",400));
+      }
+
+       await Video.updateOne({_id:videoId},{$pull :{comments:commentId}});
+       await User.updateOne({_id},{$pull :{ commented:commentId} } );
+
+    const replyIds= await Reply.aggregate([
+      { $match: { parentComment :new mongoose.Types.ObjectId(commentId) }},
+      { $project : { _id:1}},
+    ]);
+
+    const replyIdsToDelete= replyIds.map((reply) =>{
+      return reply._id;
+    });
+    
+    await Reply.deleteMany({_id: {$in :replyIdsToDelete}});
+
+    await User.updateMany(
+      {
+        $or:[
+          { commentReplied:{$in : replyIdsToDelete}},
+          { replyReplied :{$in : replyIdsToDelete}},
+        ],
+      },
+      {
+        $pull:
+        {commentReplied :{$in :replyIdsToDelete},
+        replyReplied :{$in : replyIdsToDelete},
+      },
+      }
+    );
+    await Comment.deleteOne({_id:commentId});
+
+    res.status(204).json({});
+      
+    }else{
+      if (!user.commented.includes(commentId)) {
+        return next(
+          new AppError("Only comment owner can delete the comment", 400)
+        );
+      }
+  
+      if (!video.comments.includes(commentId)) {
+        return next(new AppError("Comment and Video are not related", 400));
+      }
+  
+      await Video.updateOne({ _id: videoId }, { $pull: { comments: commentId } });
+      await User.updateOne({ _id }, { $pull: { commented: commentId } });
+  
+      const replyIds = await Reply.aggregate([
+        { $match: { parentComment: new mongoose.Types.ObjectId(commentId) } },
+        { $project: { _id: 1 } },
+      ]);
+  
+      const replyIdsToDelete = replyIds.map((reply) => {
+        return reply._id;
+      });
+  
+      await Reply.deleteMany({ _id: { $in: replyIdsToDelete } });
+  
+      await User.updateMany(
+        {
+          $or: [
+            { commentReplied: { $in: replyIdsToDelete } },
+            { replyReplied: { $in: replyIdsToDelete } },
+          ],
+        },
+        {
+          $pull: {
+            commentReplied: { $in: replyIdsToDelete },
+            replyReplied: { $in: replyIdsToDelete },
+          },
+        }
+      );
+  
+      await Comment.deleteOne({ _id: commentId });
+  
+      res.status(204).json({});
+    }
+    
+  });
+
+exports.updateComment =catchAsync( async (req,res,next) =>{
+    const { _id }=req.user;
+    const videoId=req.params.videoId;
+    const commentId=req.params.commentId;
+    const { text }=req.body;
+
+    const video=await Video.findById(videoId);
+    const comment=await Comment.findById(commentId);
+    const user=await User.findById(_id);
+
+    if(!video){
+      return next (new AppError("Video not found with this Id",400));
+    }
+    if (!comment) {
+      return next(new AppError("Comment not found with this Id", 400));
+    }
+  
+    if (!user.commented.includes(commentId)) {
+      return next(new AppError("Only comment owner can delete the comment", 400));
+    }
+  
+    if (!video.comments.includes(commentId)) {
+      return next(new AppError("Comment and Video are not related", 400));
+    }
+  
+    const updatedComment = await Comment.findOneAndUpdate(
+      { _id: commentId },
+      { text: text },
+      { new: true }
+    );
+  
+    res.status(201).json({
+      success: "true",
+      data: updatedComment,
+    });
+});
+
+exports.getComment=catchAsync(async(req,res,next) => {
+  const commentId=req.params.commentId;
+  const comment= await Comment.findById({ _id:commentId});
+  
+  if (!comment) {
+    return next(new AppError("Comment not found with this Id", 400));
+  }
+
+  res.status(201).json({
+    success: "true",
+    data: comment,
+  });
 });
